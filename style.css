@@ -115,3 +115,50 @@ body:has(#edit-toggle[style*="e57373"]) .content-cell:hover {
 }
 #save-btn { background: #b13c30; color: white; }
 #cancel-btn { background: #eee; }
+/* ====== 手机端适配魔法 ====== */
+@media (max-width: 768px) {
+  body {
+    padding: 5px; /* 减小边缘留白 */
+  }
+
+  .header {
+    flex-direction: column; /* 头部按钮竖着排，不挤 */
+    gap: 10px;
+    padding: 10px;
+  }
+
+  #calendar-title {
+    font-size: 18px; /* 标题字号变小 */
+  }
+
+  #prev-week, #next-week {
+    font-size: 14px;
+    padding: 4px 8px;
+  }
+
+  /* 关键：让整个表格可以横向滑动 */
+  .calendar-container {
+    overflow-x: auto; 
+    -webkit-overflow-scrolling: touch; /* 苹果手机滑动更顺滑 */
+  }
+
+  .calendar-grid {
+    /* 手机端固定每一列的最小宽度，防止被压缩 */
+    grid-template-columns: 80px repeat(7, 90px); /* 时间列 80px，星期列各 90px */
+  }
+
+  .grid-header {
+    font-size: 12px; /* 表头字号变小 */
+    padding: 6px;
+  }
+
+  .time-slot {
+    font-size: 11px; /* 时间字号变小 */
+    padding: 6px 2px;
+  }
+
+  .content-cell {
+    font-size: 12px;
+    padding: 4px;
+  }
+}
