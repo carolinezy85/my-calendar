@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>娇娇的专属日历</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="calendar-container">
+    <!-- 头部 -->
+    <div class="header">
+      <button id="prev-week">⬅ 上一周</button>
+      <h1 id="calendar-title">加载中...</h1>
+      <div>
+        <button id="edit-toggle">开启编辑模式</button>
+        <button id="next-week">下一周 ➡</button>
+      </div>
+    </div>
+    
+    <!-- 表格容器 -->
+    <div class="calendar-grid" id="calendar-grid"></div>
+  </div>
+
+  <!-- 编辑弹窗 -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modal-title">编辑日程</h3>
+      <label>内容：<input type="text" id="edit-content" placeholder="比如：思政材料"></label>
+      <label>跨行数：
+        <input type="number" id="edit-span" value="1" min="1" style="width: 60px;">
+        <span style="font-size:12px; color:#888;">（合并下面几行）</span>
+      </label>
+      <label>分类颜色：
+        <select id="edit-type">
+          <option value="beike">备课（浅黄）</option>
+          <option value="suoshi">琐事（浅绿）</option>
+          <option value="shangke">上课（橙色）</option>
+          <option value="waishi">外事活动（浅粉）</option>
+          <option value="wuyun">5韵（紫色）</option>
+          <option value="yanjiu">研究（浅蓝）</option>
+          <option value="jieti">结题（深粉）</option>
+          <option value="meeting">开会（红色）</option>
+        </select>
+      </label>
+      <label>
+        <input type="checkbox" id="edit-remind"> 开启提醒推送 🔔
+      </label>
+      <div class="modal-buttons">
+        <button id="save-btn">保存</button>
+        <button id="cancel-btn">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script>
+    // ====== 1. 核心状态 ======
+    let anchorDate = new Date();
+    let isEditMode = false;
+    let currentEditRow = -1;
+    let currentEditCol = -1;
+    let weekData = null;
+    const dayNames = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+
+    // ====== 2. 工具函数 ======
+    function getWeekData() {
+      const d = new Date(anchorDate);
+      const day = d.getDay() || 7;
+      d.setDate(d.getDate() - day + 1);
+      const monday = new Date(d);
+      
+      const dates = [];
+      for (let i = 0; i < 7; i++) {
+        let nextDay = new Date(monday);
+        nextDay.setDate(monday.getDate() + i);
+        dates.push(`${nextDay.getMonth() + 1}月${nextDay.getDate()}日`);
+      }
+      
+      const key = `Calendar_V3_${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`;
+      return { days: dayNames, dates, key };
+    }
+
+    // ====== 3. 数据加载与保存 ======
+    function loadCurrentWeek() {
+      const { days, dates, key } = getWeekData();
+      const saved = localStorage.getItem(key);
+      
+      if (saved) {
+        return JSON.parse(saved);
+      } else {
+        const newSchedule = defaultScheduleTemplate.map(item => {
+          return {
+            time: item.time,
+            isAllDay: item.isAllDay || false,
+            days: Array(7).fill().map(() => ({ type: 'beike', content: '', remind: false, rowSpan: 1 }))
+          };
+        });
+        return {
+          title: `${dates[0]} - ${dates[6]}`,
+          days: days,
+          dates: dates,
+          schedule: newSchedule
+        };
+      }
+    }
+
+    function saveCurrentWeek() {
+      const { key } = getWeekData();
+      localStorage.setItem(key, JSON.stringify(weekData));
+    }
+
+    // ====== 4. 渲染日历 ======
+    function renderCalendar() {
+      weekData = loadCurrentWeek();
+      const titleEl = document.getElementById('calendar-title');
+      const gridEl = document.getElementById('calendar-grid');
+      titleEl.textContent = weekData.title;
+
+      let html = '';
+      
+      // 第一行：表头
+      html += `<div class="grid-header" style="grid-column: 1; grid-row: 1;"></div>`;
+      weekData.days.forEach((day, i) => {
+        html += `<div class="grid-header" style="grid-column: ${i+2}; grid-row: 1;">${day}<br><span>${weekData.dates[i]}</span></div>`;
+      });
+
+      const totalSlots = weekData.schedule.length;
+
+      // 第一列：时间轴（根据时间段自动设置底色，四档）
+      weekData.schedule.forEach((rowItem, rowIndex) => {
+        let timeBgColor = '#fff9c4'; // 默认浅黄
+        if (rowItem.time === '全天') {
+          timeBgColor = '#cce5ff'; // 全天：浅蓝
+        } else {
+          const startHour = parseInt(rowItem.time.split(':')[0]);
+          if (startHour >= 6 && startHour < 12) {
+            timeBgColor = '#fff9c4'; // 6-12点：浅黄
+          } else if (startHour >= 12 && startHour < 16) {
+            timeBgColor = '#ffe082'; // 12-16点：中浅黄
+          } else if (startHour >= 16 && startHour < 20) {
+            timeBgColor = '#fdd835'; // 16-20点：金黄
+          } else if (startHour >= 20) {
+            timeBgColor = '#f9a825'; // 20-24点：深金黄
+          }
+        }
+        
+        html += `<div class="time-slot" style="grid-column: 1; grid-row: ${rowIndex + 2}; background: ${timeBgColor};">${rowItem.time}</div>`;
+      });
+
+      // 内容区：按天遍历，处理每一天的跨行合并
+      for (let d = 0; d < 7; d++) {
+        let t = 0;
+        while (t < totalSlots) {
+          const cellData = weekData.schedule[t].days[d];
+          const span = cellData.rowSpan || 1;
+          
+          const safeSpan = Math.min(span, totalSlots - t);
+
+          const bgColor = getColorByType(cellData.type);
+          const bellIcon = cellData.remind ? ' 🔔' : '';
+          
+          html += `<div class="content-cell" 
+                        data-row="${t}" 
+                        data-col="${d}" 
+                        style="grid-column: ${d + 2}; grid-row: ${t + 2} / span ${safeSpan}; background:${bgColor};">
+                        ${cellData.content}${bellIcon}
+                   </div>`;
+          
+          t += safeSpan;
+        }
+      }
+      
+      gridEl.innerHTML = html;
+
+      document.querySelectorAll('.content-cell').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+          if (!isEditMode) return;
+          const targetCell = e.target.closest('.content-cell');
+          const row = targetCell.dataset.row;
+          const col = targetCell.dataset.col;
+          if (row !== undefined && col !== undefined) {
+            openModal(parseInt(row), parseInt(col));
+          }
+        });
+      });
+    }
+
+    function getColorByType(type) {
+      const colors = {
+        'beike': '#fff9c4', 'suoshi': '#c8e6c9', 'shangke': '#ffe0b2', 
+        'waishi': '#ffcdd2', 'wuyun': '#d1c4e9', 'yanjiu': '#b3e5fc', 
+        'jieti': '#f8bbd0', 'meeting': '#e57373', 'all-day': '#e3f2fd'
+      };
+      return colors[type] || '#ffffff';
+    }
+
+    // ====== 5. 弹窗和编辑 ======
+    const modal = document.getElementById('edit-modal');
+    function openModal(rowIndex, colIndex) {
+      currentEditRow = rowIndex;
+      currentEditCol = colIndex;
+      
+      const rowItem = weekData.schedule[rowIndex];
+      const dayData = rowItem.days[colIndex];
+      
+      document.getElementById('modal-title').textContent = `${dayNames[colIndex]} ${rowItem.time}`;
+      document.getElementById('edit-content').value = dayData.content || "";
+      document.getElementById('edit-remind').checked = dayData.remind || false;
+      document.getElementById('edit-type').value = dayData.type || 'beike';
+      document.getElementById('edit-span').value = dayData.rowSpan || 1;
+      
+      modal.classList.remove('hidden');
+    }
+
+    document.getElementById('save-btn').onclick = () => {
+      const rowItem = weekData.schedule[currentEditRow];
+      const dayData = rowItem.days[currentEditCol];
+      
+      dayData.content = document.getElementById('edit-content').value;
+      dayData.remind = document.getElementById('edit-remind').checked;
+      dayData.type = document.getElementById('edit-type').value;
+      
+      const spanInput = parseInt(document.getElementById('edit-span').value) || 1;
+      const maxSpan = weekData.schedule.length - currentEditRow;
+      dayData.rowSpan = Math.max(1, Math.min(spanInput, maxSpan));
+      
+      saveCurrentWeek();
+      modal.classList.add('hidden');
+      renderCalendar(); 
+    };
+
+    document.getElementById('cancel-btn').onclick = () => modal.classList.add('hidden');
+
+    // ====== 6. 前后周切换 ======
+    document.getElementById('prev-week').onclick = () => {
+      anchorDate.setDate(anchorDate.getDate() - 7);
+      renderCalendar();
+    };
+
+    document.getElementById('next-week').onclick = () => {
+      anchorDate.setDate(anchorDate.getDate() + 7);
+      renderCalendar();
+    };
+
+    // ====== 7. 编辑模式切换 ======
+    document.getElementById('edit-toggle').onclick = (e) => {
+      isEditMode = !isEditMode;
+      e.target.textContent = isEditMode ? "关闭编辑模式" : "开启编辑模式";
+      e.target.style.background = isEditMode ? "#e57373" : "#ffffff";
+      e.target.style.color = isEditMode ? "white" : "#b13c30";
+    };
+
+    renderCalendar();
+  </script>
+</body>
+</html>
